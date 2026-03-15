@@ -43,6 +43,7 @@ export function applyEvent(state: DeliveryState, event: PortalEvent): DeliverySt
     case 'status_update':
       return { ...state, status: event.status, updatedAt: event.updated_at }
     case 'location_update':
+      // updatedAt not advanced — location pings are operational, not status transitions
       return {
         ...state,
         latestLocation: {
@@ -55,6 +56,11 @@ export function applyEvent(state: DeliveryState, event: PortalEvent): DeliverySt
     case 'new_message':
       return { ...state, messages: [...state.messages, event.message] }
     case 'proof_attached':
+      // updatedAt not advanced — proof attachment does not change status
       return { ...state, proofFileId: event.proof_file_id }
+    default: {
+      const _exhaustive: never = event
+      throw new Error(`Unhandled PortalEvent type: ${(_exhaustive as any).type}`)
+    }
   }
 }

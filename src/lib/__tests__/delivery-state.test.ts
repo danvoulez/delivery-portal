@@ -77,4 +77,15 @@ describe('applyEvent', () => {
     const next = applyEvent(baseState, { type: 'proof_attached', proof_file_id: 'file-42' })
     expect(next.proofFileId).toBe('file-42')
   })
+
+  it('location_update handles null accuracy_meters', () => {
+    const next = applyEvent(baseState, {
+      type: 'location_update',
+      latitude: -23.5,
+      longitude: -46.6,
+      accuracy_meters: null,
+      recorded_at: '2026-03-15T11:05:00Z',
+    })
+    expect(next.latestLocation?.accuracy_meters).toBeNull()
+  })
 })
