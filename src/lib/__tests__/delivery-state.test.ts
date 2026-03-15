@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { applyEvent, type DeliveryState } from '../delivery-state'
 import type { DeliveryMessageView } from '@/types/portal'
-import { trackingViewToState, jobViewToState } from '../portal-mapper'
-import type { PublicDeliveryTrackingView, DriverDeliveryJobView } from '@/types/portal'
+import { trackingViewToState, jobViewToState, mapLocation } from '../portal-mapper'
+import type { PublicDeliveryTrackingView, DriverDeliveryJobView, LatestLocationView } from '@/types/portal'
 
 const baseState: DeliveryState = {
   status: 'assigned',
@@ -146,7 +146,7 @@ describe('trackingViewToState', () => {
     const state = trackingViewToState(view)
 
     expect(state.latestLocation).toBeNull()
-    expect(state.updatedAt).toBe(new Date(0).toISOString())
+    expect(state.updatedAt).toBeNull()
   })
 
   it('sets proofFileId to null (tracking view does not carry proof file ID)', () => {
@@ -260,7 +260,7 @@ describe('jobViewToState', () => {
     expect(state.messages).toHaveLength(1)
     expect(state.messages[0].id).toBe('msg-10')
     expect(state.proofFileId).toBeNull()
-    expect(state.updatedAt).toBe(new Date(0).toISOString())
+    expect(state.updatedAt).toBeNull()
   })
 
   it('handles empty messageThreadPreview', () => {
@@ -278,5 +278,33 @@ describe('jobViewToState', () => {
 
     const state = jobViewToState(view)
     expect(state.messages).toEqual([])
+  })
+})
+
+describe('mapLocation', () => {
+  it('renames camelCase fields to snake_case and preserves values', () => {
+    const loc: LatestLocationView = {
+      latitude: -23.5,
+      longitude: -46.6,
+      accuracyMeters: 8,
+      recordedAt: '2026-03-15T15:00:00Z',
+    }
+    expect(mapLocation(loc)).toEqual({
+      lat: -23.5,
+      lng: -46.6,
+      accuracy_meters: 8,
+      recorded_at: '2026-03-15T15:00:00Z',
+    })
+  })
+
+  it('passes through accuracyMeters: null as accuracy_meters: null', () => {
+    const loc: LatestLocationView = {
+      latitude: 0,
+      longitude: 0,
+      accuracyMeters: null,
+      recordedAt: '2026-03-15T15:01:00Z',
+    }
+    const result = mapLocation(loc)
+    expect(result?.accuracy_meters).toBeNull()
   })
 })

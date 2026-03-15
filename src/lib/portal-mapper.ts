@@ -1,7 +1,7 @@
 import type { PublicDeliveryTrackingView, DriverDeliveryJobView, LatestLocationView } from '@/types/portal'
 import type { DeliveryState } from '@/lib/delivery-state'
 
-function mapLocation(loc: LatestLocationView): DeliveryState['latestLocation'] {
+export function mapLocation(loc: LatestLocationView): DeliveryState['latestLocation'] {
   return {
     lat: loc.latitude,
     lng: loc.longitude,
@@ -16,7 +16,9 @@ export function trackingViewToState(view: PublicDeliveryTrackingView): DeliveryS
     latestLocation: view.latestLocation ? mapLocation(view.latestLocation) : null,
     messages: view.messageThreadPreview,
     proofFileId: null,
-    updatedAt: view.lastLocationAt ?? new Date(0).toISOString(),
+    // lastLocationAt is the closest proxy available — backend PublicDeliveryTrackingView
+    // does not expose delivery.updated_at directly. Null means "not yet known".
+    updatedAt: view.lastLocationAt ?? null,
   }
 }
 
@@ -25,7 +27,7 @@ export function jobViewToState(view: DriverDeliveryJobView): DeliveryState {
     status: view.currentStatus,
     latestLocation: null,
     messages: view.messageThreadPreview,
-    proofFileId: null,
-    updatedAt: new Date(0).toISOString(),
+    proofFileId: null,  // DriverDeliveryJobView carries no proof file ID — set on proof_attached event
+    updatedAt: null,
   }
 }

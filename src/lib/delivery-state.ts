@@ -3,7 +3,7 @@ import type { DeliveryStatus, DeliveryMessageView } from '@/types/portal'
 export interface DeliveryState {
   status: DeliveryStatus
   proofFileId: string | null
-  updatedAt: string
+  updatedAt: string | null
   messages: DeliveryMessageView[]
   latestLocation: {
     lat: number
@@ -15,6 +15,8 @@ export interface DeliveryState {
 
 export type PortalEvent =
   | { type: 'status_update'; status: DeliveryStatus; updated_at: string }
+  // Field names below are snake_case intentionally — must match the realtime broadcast payload shape
+  // published by the backend (infrastructure/realtime). Distinct from the REST DTO (LatestLocationView).
   | { type: 'location_update'; latitude: number; longitude: number; accuracy_meters: number | null; recorded_at: string }
   | { type: 'new_message'; message: DeliveryMessageView }
   | { type: 'proof_attached'; proof_file_id: string }
