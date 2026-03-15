@@ -1,6 +1,7 @@
 import DeliveryPortalRoot from '@/components/DeliveryPortalRoot'
 import type { PortalSession } from '@/types/portal'
 
+// Next.js 14: params is synchronous. In Next.js 15, params becomes Promise<...> and must be awaited.
 interface Props {
   params: { token: string }
 }
@@ -8,11 +9,14 @@ interface Props {
 export default async function DeliveryPortalPage({ params }: Props) {
   const { token } = params
 
+  const backendUrl = process.env.DELIVERY_BACKEND_URL
+  if (!backendUrl) throw new Error('DELIVERY_BACKEND_URL is not set')
+
   let session: PortalSession
 
   try {
     const res = await fetch(
-      `${process.env.DELIVERY_BACKEND_URL}/api/external/session/resolve`,
+      `${backendUrl}/api/external/session/resolve`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
