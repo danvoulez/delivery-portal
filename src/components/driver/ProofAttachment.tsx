@@ -19,34 +19,39 @@ export default function ProofAttachment({ deliveryId, supabase, onProofAttached 
     setUploading(true)
     setError(null)
 
-    // Use a random ID as file identifier — matches what attach_proof_to_delivery expects
-    const fileId = crypto.randomUUID()
-    const storagePath = `proofs/${deliveryId}/${fileId}`
+    try {
+      // Use a random ID as file identifier — matches what attach_proof_to_delivery expects
+      const fileId = crypto.randomUUID()
+      const storagePath = `proofs/${deliveryId}/${fileId}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('delivery-proofs')
-      .upload(storagePath, file, { contentType: file.type })
+      const { error: uploadError } = await supabase.storage
+        .from('delivery-proofs')
+        .upload(storagePath, file, { contentType: file.type })
 
-    if (uploadError) {
-      setError('Erro ao enviar a foto. Tente novamente.')
+      if (uploadError) {
+        setError('Erro ao enviar a foto. Tente novamente.')
+        return
+      }
+
+      const { error: rpcError } = await supabase.rpc('attach_proof_to_delivery', {
+        p_delivery_id: deliveryId,
+        p_file_id: fileId,
+      })
+
+      if (rpcError) {
+        // v1: orphaned Storage file accepted on RPC failure. A future improvement
+        // would call supabase.storage.from('delivery-proofs').remove([storagePath])
+        // to clean up. For now, log the error and surface the user-facing message.
+        console.error('[ProofAttachment] attach_proof_to_delivery failed', rpcError)
+        setError('Erro ao registrar o comprovante. Tente novamente.')
+        return
+      }
+
+      onProofAttached(fileId)
+      setDone(true)
+    } finally {
       setUploading(false)
-      return
     }
-
-    const { error: rpcError } = await supabase.rpc('attach_proof_to_delivery', {
-      p_delivery_id: deliveryId,
-      p_file_id: fileId,
-    })
-
-    if (rpcError) {
-      setError('Erro ao registrar o comprovante. Tente novamente.')
-      setUploading(false)
-      return
-    }
-
-    onProofAttached(fileId)
-    setDone(true)
-    setUploading(false)
   }
 
   if (done) {

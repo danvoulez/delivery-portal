@@ -52,9 +52,13 @@ export default function DriverActions({
         return
       }
 
-      if (data) {
-        onStatusUpdate(nextStatus, (data as { updated_at: string }).updated_at)
+      if (!data || typeof (data as Record<string, unknown>).updated_at !== 'string') {
+        console.error('[DriverActions] advance: unexpected RPC response shape', data)
+        // Still advance the status optimistically with a fallback timestamp
+        onStatusUpdate(nextStatus, new Date().toISOString())
+        return
       }
+      onStatusUpdate(nextStatus, (data as { updated_at: string }).updated_at)
     } finally {
       setLoading(false)
     }
