@@ -11,6 +11,7 @@ interface Props {
   deliveryId: string
   supabase: SupabaseClient
   onNewMessage: (msg: PortalMessage) => void
+  isTerminal: boolean
 }
 
 export default function ChatPanel({
@@ -19,6 +20,7 @@ export default function ChatPanel({
   deliveryId,
   supabase,
   onNewMessage,
+  isTerminal,
 }: Props) {
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
@@ -33,15 +35,23 @@ export default function ChatPanel({
     const trimmed = body.trim()
     if (!trimmed || sending) return
     setSending(true)
-    const { data, error } = await supabase.rpc('insert_delivery_message_from_session', {
-      p_delivery_id: deliveryId,
-      p_body: trimmed,
-    })
-    if (!error && data) {
-      onNewMessage(data as PortalMessage)
-      setBody('')
+    try {
+      const { data, error } = await supabase.rpc('insert_delivery_message_from_session', {
+        p_delivery_id: deliveryId,
+        p_body: trimmed,
+      })
+      if (error) {
+        console.error('[ChatPanel] message send failed', error)
+        return
+      }
+      if (data) {
+        // RPC returns a single delivery_messages row matching PortalMessage
+        onNewMessage(data as PortalMessage)
+        setBody('')
+      }
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -52,7 +62,7 @@ export default function ChatPanel({
   }
 
   return (
-    <div className="bg-white rounded-xl border flex flex-col h-72">
+    <div data-testid="chat-panel" className="bg-white rounded-xl border flex flex-col h-72">
       <div className="px-4 py-2.5 border-b flex items-center gap-2">
         <span className="text-sm font-medium text-gray-700">Mensagens</span>
         {messages.length > 0 && (
@@ -74,16 +84,21 @@ export default function ChatPanel({
 
       <div className="border-t p-3 flex gap-2">
         <input
-          className="flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50"
-          placeholder="Escreva uma mensagem..."
+          data-testid="chat-input"
+          aria-label="Mensagem"
+          className="flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+          placeholder={isTerminal ? 'Entrega finalizada' : 'Escreva uma mensagem...'}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleKey}
-          disabled={sending}
+          disabled={sending || isTerminal}
         />
         <button
+          data-testid="chat-send-button"
+          aria-label="Enviar mensagem"
+          aria-busy={sending}
           onClick={send}
-          disabled={!body.trim() || sending}
+          disabled={!body.trim() || sending || isTerminal}
           className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg font-medium disabled:opacity-40 transition-opacity"
         >
           {sending ? '...' : 'Enviar'}

@@ -117,6 +117,7 @@ export default function DeliveryPortalRoot({
           deliveryId={deliveryId}
           supabase={supabase}
           onNewMessage={handleNewMessage}
+          isTerminal={isTerminal}
         />
 
         {audience === 'driver' && !isTerminal && (
