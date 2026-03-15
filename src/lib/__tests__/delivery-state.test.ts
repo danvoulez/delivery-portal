@@ -166,6 +166,77 @@ describe('trackingViewToState', () => {
     const state = trackingViewToState(view)
     expect(state.proofFileId).toBeNull()
   })
+
+  it('maps all messages when messageThreadPreview has multiple entries', () => {
+    const msg1: DeliveryMessageView = {
+      id: 'msg-a',
+      senderLabel: 'Customer',
+      body: 'Where is my order?',
+      createdAt: '2026-03-15T13:00:00Z',
+      audience: 'customer',
+    }
+    const msg2: DeliveryMessageView = {
+      id: 'msg-b',
+      senderLabel: 'Driver',
+      body: 'Almost there',
+      createdAt: '2026-03-15T13:05:00Z',
+      audience: 'driver',
+    }
+    const msg3: DeliveryMessageView = {
+      id: 'msg-c',
+      senderLabel: 'Ops',
+      body: 'Noted',
+      createdAt: '2026-03-15T13:06:00Z',
+      audience: 'ops',
+    }
+    const view: PublicDeliveryTrackingView = {
+      deliveryPublicRef: 'REF-007',
+      status: 'en_route_dropoff',
+      statusLabel: 'A caminho da entrega',
+      timeline: [],
+      etaSimple: null,
+      destinationSummary: 'Rua E, 5',
+      latestLocation: null,
+      lastLocationAt: null,
+      proofSummary: null,
+      messageThreadPreview: [msg1, msg2, msg3],
+    }
+
+    const state = trackingViewToState(view)
+
+    expect(state.messages).toHaveLength(3)
+    expect(state.messages[0].id).toBe('msg-a')
+    expect(state.messages[1].id).toBe('msg-b')
+    expect(state.messages[2].id).toBe('msg-c')
+    expect(state.messages[2].audience).toBe('ops')
+  })
+
+  it('maps accuracyMeters: null from location view to accuracy_meters: null in state', () => {
+    const view: PublicDeliveryTrackingView = {
+      deliveryPublicRef: 'REF-008',
+      status: 'picked_up',
+      statusLabel: 'Pacote coletado',
+      timeline: [],
+      etaSimple: null,
+      destinationSummary: 'Rua F, 6',
+      latestLocation: {
+        latitude: -23.1,
+        longitude: -46.1,
+        accuracyMeters: null,
+        recordedAt: '2026-03-15T14:00:00Z',
+      },
+      lastLocationAt: '2026-03-15T14:00:00Z',
+      proofSummary: null,
+      messageThreadPreview: [],
+    }
+
+    const state = trackingViewToState(view)
+
+    expect(state.latestLocation).not.toBeNull()
+    expect(state.latestLocation?.accuracy_meters).toBeNull()
+    expect(state.latestLocation?.lat).toBe(-23.1)
+    expect(state.latestLocation?.lng).toBe(-46.1)
+  })
 })
 
 describe('jobViewToState', () => {
