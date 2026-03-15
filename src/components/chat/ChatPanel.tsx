@@ -1,24 +1,23 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { PortalMessage, Audience } from '@/types/portal'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { DeliveryMessageView, Audience } from '@/types/portal'
 import ChatMessage from './ChatMessage'
 
 interface Props {
-  messages: PortalMessage[]
+  messages: DeliveryMessageView[]
   audience: Audience
   deliveryId: string
-  supabase: SupabaseClient
-  onNewMessage: (msg: PortalMessage) => void
+  portalSessionToken: string
+  onNewMessage: (msg: DeliveryMessageView) => void
   isTerminal: boolean
 }
 
 export default function ChatPanel({
   messages,
   audience,
-  deliveryId,
-  supabase,
+  deliveryId: _deliveryId,
+  portalSessionToken,
   onNewMessage,
   isTerminal,
 }: Props) {
@@ -36,19 +35,22 @@ export default function ChatPanel({
     if (!trimmed || sending) return
     setSending(true)
     try {
-      const { data, error } = await supabase.rpc('insert_delivery_message_from_session', {
-        p_delivery_id: deliveryId,
-        p_body: trimmed,
+      const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
+      const res = await fetch(`${backendUrl}/api/external/delivery/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${portalSessionToken}`,
+        },
+        body: JSON.stringify({ body: trimmed }),
       })
-      if (error) {
-        console.error('[ChatPanel] message send failed', error)
+      if (!res.ok) {
+        console.error('Failed to send message')
         return
       }
-      if (data) {
-        // RPC returns a single delivery_messages row matching PortalMessage
-        onNewMessage(data as PortalMessage)
-        setBody('')
-      }
+      const data = await res.json() as DeliveryMessageView
+      onNewMessage(data)
+      setBody('')
     } finally {
       setSending(false)
     }

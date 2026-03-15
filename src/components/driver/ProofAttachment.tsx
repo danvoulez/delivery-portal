@@ -6,10 +6,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 interface Props {
   deliveryId: string
   supabase: SupabaseClient
+  portalSessionToken: string
   onProofAttached: (proof_file_id: string) => void
 }
 
-export default function ProofAttachment({ deliveryId, supabase, onProofAttached }: Props) {
+export default function ProofAttachment({ deliveryId, supabase, portalSessionToken, onProofAttached }: Props) {
   const [uploading, setUploading] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,10 +21,11 @@ export default function ProofAttachment({ deliveryId, supabase, onProofAttached 
     setError(null)
 
     try {
-      // Use a random ID as file identifier — matches what attach_proof_to_delivery expects
+      // Use a random ID as file identifier
       const fileId = crypto.randomUUID()
       const storagePath = `proofs/${deliveryId}/${fileId}`
 
+      // Storage upload still uses the Supabase client
       const { error: uploadError } = await supabase.storage
         .from('delivery-proofs')
         .upload(storagePath, file, { contentType: file.type })
@@ -33,16 +35,21 @@ export default function ProofAttachment({ deliveryId, supabase, onProofAttached 
         return
       }
 
-      const { error: rpcError } = await supabase.rpc('attach_proof_to_delivery', {
-        p_delivery_id: deliveryId,
-        p_file_id: fileId,
+      const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
+      const res = await fetch(`${backendUrl}/api/external/delivery/proof`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${portalSessionToken}`,
+        },
+        body: JSON.stringify({ proofFileId: fileId }),
       })
 
-      if (rpcError) {
+      if (!res.ok) {
         // v1: orphaned Storage file accepted on RPC failure. A future improvement
         // would call supabase.storage.from('delivery-proofs').remove([storagePath])
         // to clean up. For now, log the error and surface the user-facing message.
-        console.error('[ProofAttachment] attach_proof_to_delivery failed', rpcError)
+        console.error('[ProofAttachment] proof registration failed')
         setError('Erro ao registrar o comprovante. Tente novamente.')
         return
       }

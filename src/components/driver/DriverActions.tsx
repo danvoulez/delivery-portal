@@ -9,6 +9,7 @@ import ProofAttachment from './ProofAttachment'
 interface Props {
   status: DeliveryStatus
   deliveryId: string
+  portalSessionToken: string
   supabase: SupabaseClient
   onStatusUpdate: (status: DeliveryStatus, updated_at: string) => void
   onProofAttached: (proof_file_id: string) => void
@@ -24,6 +25,7 @@ const STATUS_LABEL: Partial<Record<DeliveryStatus, string>> = {
 export default function DriverActions({
   status,
   deliveryId,
+  portalSessionToken,
   supabase,
   onStatusUpdate,
   onProofAttached,
@@ -39,26 +41,22 @@ export default function DriverActions({
     setError(null)
 
     try {
-      const { data, error: rpcError } = await supabase.rpc(
-        'update_delivery_status_from_public_session',
-        {
-          p_delivery_id: deliveryId,
-          p_next_status: nextStatus,
+      const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
+      const res = await fetch(`${backendUrl}/api/external/delivery/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${portalSessionToken}`,
         },
-      )
+        body: JSON.stringify({ nextStatus, proofFileId: null }),
+      })
 
-      if (rpcError) {
+      if (!res.ok) {
         setError('Não foi possível atualizar o status. Tente novamente.')
         return
       }
 
-      if (!data || typeof (data as Record<string, unknown>).updated_at !== 'string') {
-        console.error('[DriverActions] advance: unexpected RPC response shape', data)
-        // Still advance the status optimistically with a fallback timestamp
-        onStatusUpdate(nextStatus, new Date().toISOString())
-        return
-      }
-      onStatusUpdate(nextStatus, (data as { updated_at: string }).updated_at)
+      onStatusUpdate(nextStatus, new Date().toISOString())
     } finally {
       setLoading(false)
     }
@@ -82,6 +80,7 @@ export default function DriverActions({
         <ProofAttachment
           deliveryId={deliveryId}
           supabase={supabase}
+          portalSessionToken={portalSessionToken}
           onProofAttached={onProofAttached}
         />
       )}

@@ -1,5 +1,6 @@
 import DeliveryPortalRoot from '@/components/DeliveryPortalRoot'
-import type { PortalSession } from '@/types/portal'
+import type { PortalSessionResolved, PublicDeliveryTrackingView, DriverDeliveryJobView } from '@/types/portal'
+import { trackingViewToState, jobViewToState } from '@/lib/portal-mapper'
 
 // Next.js 14: params is synchronous. In Next.js 15, params becomes Promise<...> and must be awaited.
 interface Props {
@@ -12,32 +13,44 @@ export default async function DeliveryPortalPage({ params }: Props) {
   const backendUrl = process.env.DELIVERY_BACKEND_URL
   if (!backendUrl) throw new Error('DELIVERY_BACKEND_URL is not set')
 
-  let session: PortalSession
+  // Step 1: resolve session
+  const sessionRes = await fetch(`${backendUrl}/api/external/delivery/session/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+    cache: 'no-store',
+  })
+  if (!sessionRes.ok) return <TokenErrorPage />
 
-  try {
-    const res = await fetch(
-      `${backendUrl}/api/external/session/resolve`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-        cache: 'no-store',
-      },
-    )
+  const session = await sessionRes.json() as PortalSessionResolved
 
-    if (!res.ok) return <TokenErrorPage />
+  // Step 2: fetch appropriate view
+  const viewRes = await fetch(
+    `${backendUrl}/api/external/delivery/${session.audience === 'driver' ? 'job' : 'tracking'}`,
+    { headers: { Authorization: `Bearer ${session.portalSessionToken}` }, cache: 'no-store' },
+  )
+  if (!viewRes.ok) return <TokenErrorPage />
 
-    session = (await res.json()) as PortalSession
-  } catch {
-    return <TokenErrorPage />
-  }
+  const view = await viewRes.json()
 
+  // Step 3: decode deliveryId from JWT payload (base64url, no npm package needed)
+  const jwtPayload = JSON.parse(
+    Buffer.from(session.portalSessionToken.split('.')[1], 'base64url').toString(),
+  )
+  const deliveryId: string = jwtPayload.delivery_id
+
+  // Step 4: map to initial state
+  const initialState = session.audience === 'driver'
+    ? jobViewToState(view as DriverDeliveryJobView)
+    : trackingViewToState(view as PublicDeliveryTrackingView)
+
+  // Step 5: render
   return (
     <DeliveryPortalRoot
       portalSessionToken={session.portalSessionToken}
       audience={session.audience}
-      deliveryId={session.deliveryId}
-      initialSnapshot={session.snapshot}
+      deliveryId={deliveryId}
+      initialState={initialState}
     />
   )
 }

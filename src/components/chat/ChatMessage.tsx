@@ -1,12 +1,12 @@
-import type { PortalMessage, Audience } from '@/types/portal'
+import type { DeliveryMessageView, Audience } from '@/types/portal'
 
 interface Props {
-  message: PortalMessage
+  message: DeliveryMessageView
   myAudience: Audience
 }
 
 export default function ChatMessage({ message, myAudience }: Props) {
-  const isMine = message.sender_audience === myAudience
+  const isMine = message.audience === myAudience
 
   return (
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>

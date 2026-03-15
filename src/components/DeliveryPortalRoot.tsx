@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { createPortalClient } from '@/lib/supabase-portal'
-import { snapshotToState, applyEvent, type DeliveryState, type PortalEvent } from '@/lib/delivery-state'
-import type { DeliverySnapshot, Audience, PortalMessage, DeliveryStatus } from '@/types/portal'
+import { applyEvent, type DeliveryState, type PortalEvent } from '@/lib/delivery-state'
+import type { Audience, DeliveryMessageView, DeliveryStatus } from '@/types/portal'
 import { NEXT_STATUS } from '@/lib/pipeline-steps'
 import PipelineView from './pipeline/PipelineView'
 import MapPanel from './map/MapPanel'
@@ -14,7 +14,7 @@ interface Props {
   portalSessionToken: string
   audience: Audience
   deliveryId: string
-  initialSnapshot: DeliverySnapshot
+  initialState: DeliveryState
 }
 
 const KNOWN_EVENT_TYPES = new Set<string>([
@@ -28,12 +28,11 @@ export default function DeliveryPortalRoot({
   portalSessionToken,
   audience,
   deliveryId,
-  initialSnapshot,
+  initialState,
 }: Props) {
   const [state, dispatch] = useReducer(
     (s: DeliveryState, e: PortalEvent) => applyEvent(s, e),
-    initialSnapshot,
-    snapshotToState,
+    initialState,
   )
 
   // Create once, stable ref — token is fixed for the lifetime of the session
@@ -73,7 +72,7 @@ export default function DeliveryPortalRoot({
   const isTerminal = !(state.status in NEXT_STATUS)
 
   const handleNewMessage = useCallback(
-    (msg: PortalMessage) => dispatch({ type: 'new_message', message: msg }),
+    (msg: DeliveryMessageView) => dispatch({ type: 'new_message', message: msg }),
     [],  // dispatch is stable
   )
 
@@ -93,21 +92,20 @@ export default function DeliveryPortalRoot({
       <header className="bg-white border-b px-4 py-3 sticky top-0 z-10">
         <p className="text-xs text-gray-400 uppercase tracking-wide">Acompanhamento</p>
         <p className="text-sm font-semibold text-gray-800">
-          {state.publicRef ?? `#${state.id.slice(0, 8)}`}
+          #{deliveryId.slice(0, 8)}
         </p>
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
         <PipelineView status={state.status} />
 
-        {/* supabase is passed to MapPanel so the driver can publish location via RPC (see Task 9/MapPanel) */}
         {state.latestLocation && (
           <MapPanel
             latestLocation={state.latestLocation}
-            dropoffAddressLine={state.dropoffAddressLine}
+            dropoffAddressLine={null}
             audience={audience}
             deliveryId={deliveryId}
-            supabase={supabase}
+            portalSessionToken={portalSessionToken}
           />
         )}
 
@@ -115,7 +113,7 @@ export default function DeliveryPortalRoot({
           messages={state.messages}
           audience={audience}
           deliveryId={deliveryId}
-          supabase={supabase}
+          portalSessionToken={portalSessionToken}
           onNewMessage={handleNewMessage}
           isTerminal={isTerminal}
         />
@@ -124,9 +122,10 @@ export default function DeliveryPortalRoot({
           <DriverActions
             status={state.status}
             deliveryId={deliveryId}
-            supabase={supabase}
+            portalSessionToken={portalSessionToken}
             onStatusUpdate={handleStatusUpdate}
             onProofAttached={handleProofAttached}
+            supabase={supabase}
           />
         )}
       </div>

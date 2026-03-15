@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
-import type { LatestLocation, Audience } from '@/types/portal'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { DeliveryState } from '@/lib/delivery-state'
+import type { Audience } from '@/types/portal'
 
 const MIN_INTERVAL_MS = 10_000   // 10 seconds minimum between publishes
 const MIN_DISTANCE_M  = 20       // 20 meters minimum displacement
@@ -23,16 +23,18 @@ function haversineDistance(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+type LatestLocation = NonNullable<DeliveryState['latestLocation']>
+
 interface Props {
   /** Non-null guaranteed by parent (DeliveryPortalRoot renders MapPanel only when latestLocation is non-null) */
   latestLocation: LatestLocation
   dropoffAddressLine: string | null  // Reserved for future dropoff marker — not yet consumed
   audience: Audience
   deliveryId: string
-  supabase: SupabaseClient
+  portalSessionToken: string
 }
 
-export default function MapPanel({ latestLocation, audience, deliveryId, supabase }: Props) {
+export default function MapPanel({ latestLocation, audience, deliveryId: _deliveryId, portalSessionToken }: Props) {
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const { isLoaded } = useJsApiLoader({
@@ -56,16 +58,23 @@ export default function MapPanel({ latestLocation, audience, deliveryId, supabas
           haversineDistance(lastCoords.current, pos.coords) < MIN_DISTANCE_M
         ) return
 
-        const { error: rpcError } = await supabase.rpc('insert_driver_location_from_session', {
-          p_delivery_id: deliveryId,
-          p_latitude: pos.coords.latitude,
-          p_longitude: pos.coords.longitude,
-          p_accuracy_meters: pos.coords.accuracy ?? null,
-          p_recorded_at: new Date(pos.timestamp).toISOString(),
+        const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
+        const res = await fetch(`${backendUrl}/api/external/delivery/location`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${portalSessionToken}`,
+          },
+          body: JSON.stringify({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracyMeters: pos.coords.accuracy ?? null,
+            recordedAt: new Date(pos.timestamp).toISOString(),
+          }),
         })
 
-        if (rpcError) {
-          console.error('[MapPanel] location publish failed — throttle state not advanced', rpcError)
+        if (!res.ok) {
+          console.error('[MapPanel] location publish failed — throttle state not advanced')
           return
         }
 
@@ -81,7 +90,7 @@ export default function MapPanel({ latestLocation, audience, deliveryId, supabas
         navigator.geolocation.clearWatch(watchId.current)
       }
     }
-  }, [audience, deliveryId, supabase])
+  }, [audience, portalSessionToken])
 
   if (!isLoaded) {
     return (
