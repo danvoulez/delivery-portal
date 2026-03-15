@@ -16,7 +16,11 @@ export default function PipelineStep({ step, state }: Props) {
   return (
     <motion.div
       layout
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -10 }}
+      transition={{ duration: 0.2 }}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg ${
         isActive
           ? isFailure
             ? 'bg-red-50 border border-red-200'
