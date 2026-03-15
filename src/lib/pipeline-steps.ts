@@ -5,6 +5,7 @@ export type StepState = 'completed' | 'active' | 'pending' | 'hidden'
 export interface PipelineStep {
   status: DeliveryStatus
   label: string
+  /** When true, the UI renders this step with failure styling (red) instead of the default active styling (blue). */
   failureTerminal?: boolean
 }
 
@@ -18,14 +19,17 @@ export const PIPELINE_STEPS: PipelineStep[] = [
 ]
 
 // The canonical ordering for progress comparison.
-// delivered and failed_attempt share the same index — they are parallel terminals.
+// NOTE: The parallel terminals (delivered / failed_attempt) are handled by the
+// explicit guard clauses at the top of stepStateFor — index comparison for these
+// two statuses is never reached when they are current. Their relative order here
+// only matters for determining whether pre-terminal steps are 'completed'.
 const STATUS_ORDER: DeliveryStatus[] = [
   'assigned',
   'en_route_pickup',
   'picked_up',
   'en_route_dropoff',
-  'delivered',       // index 4
-  'failed_attempt',  // index 4 (same level)
+  'delivered',
+  'failed_attempt',
 ]
 
 export function stepStateFor(currentStatus: DeliveryStatus, stepStatus: DeliveryStatus): StepState {
@@ -39,6 +43,9 @@ export function stepStateFor(currentStatus: DeliveryStatus, stepStatus: Delivery
 
   const currentIdx = STATUS_ORDER.indexOf(currentStatus)
   const stepIdx = STATUS_ORDER.indexOf(stepStatus)
+
+  if (currentIdx === -1) throw new Error(`stepStateFor: unknown currentStatus "${currentStatus}"`)
+  if (stepIdx === -1) throw new Error(`stepStateFor: unknown stepStatus "${stepStatus}"`)
 
   if (stepIdx < currentIdx) return 'completed'
   if (stepIdx === currentIdx) return 'active'

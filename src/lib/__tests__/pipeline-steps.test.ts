@@ -37,6 +37,8 @@ describe('stepStateFor', () => {
 describe('NEXT_STATUS', () => {
   it('maps status to next in machine', () => {
     expect(NEXT_STATUS['assigned']).toBe('en_route_pickup')
+    expect(NEXT_STATUS['en_route_pickup']).toBe('picked_up')
+    expect(NEXT_STATUS['picked_up']).toBe('en_route_dropoff')
     expect(NEXT_STATUS['en_route_dropoff']).toBe('delivered')
   })
 
