@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { createPortalClient } from '@/lib/supabase-portal'
 import { snapshotToState, applyEvent, type DeliveryState, type PortalEvent } from '@/lib/delivery-state'
 import type { DeliverySnapshot, Audience, PortalMessage, DeliveryStatus } from '@/types/portal'
+import { NEXT_STATUS } from '@/lib/pipeline-steps'
 import PipelineView from './pipeline/PipelineView'
 import MapPanel from './map/MapPanel'
 import ChatPanel from './chat/ChatPanel'
@@ -15,6 +16,13 @@ interface Props {
   deliveryId: string
   initialSnapshot: DeliverySnapshot
 }
+
+const KNOWN_EVENT_TYPES = new Set<string>([
+  'status_update',
+  'location_update',
+  'new_message',
+  'proof_attached',
+])
 
 export default function DeliveryPortalRoot({
   portalSessionToken,
@@ -35,11 +43,18 @@ export default function DeliveryPortalRoot({
     const channel = supabase
       .channel(`delivery:${deliveryId}`)
       .on('broadcast', { event: '*' }, ({ event, payload }) => {
+        if (!KNOWN_EVENT_TYPES.has(event)) {
+          console.warn(`[portal] Unknown broadcast event type: "${event}" — ignored`)
+          return
+        }
         dispatch({ type: event, ...payload } as PortalEvent)
       })
       .subscribe(async (status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // Reconnect: re-fetch current status to patch any missed status_update
+          // v1 recovery: on reconnect we only re-fetch status to patch missed status_update events.
+          // Missed location_update events are low-risk (a new ping will arrive shortly).
+          // Missed new_message events are a known v1 gap — a future improvement would call
+          // a snapshot RPC or re-fetch messages with after_id to recover missed chat messages.
           const { data } = await supabase.rpc('get_delivery_current_status', {
             p_delivery_id: deliveryId,
           })
@@ -54,7 +69,24 @@ export default function DeliveryPortalRoot({
     }
   }, [deliveryId, supabase])
 
-  const isTerminal = state.status === 'delivered' || state.status === 'failed_attempt'
+  // A status is terminal when it has no next state in the machine
+  const isTerminal = !(state.status in NEXT_STATUS)
+
+  const handleNewMessage = useCallback(
+    (msg: PortalMessage) => dispatch({ type: 'new_message', message: msg }),
+    [],  // dispatch is stable
+  )
+
+  const handleStatusUpdate = useCallback(
+    (status: DeliveryStatus, updated_at: string) =>
+      dispatch({ type: 'status_update', status, updated_at }),
+    [],
+  )
+
+  const handleProofAttached = useCallback(
+    (proof_file_id: string) => dispatch({ type: 'proof_attached', proof_file_id }),
+    [],
+  )
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -68,6 +100,7 @@ export default function DeliveryPortalRoot({
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
         <PipelineView status={state.status} />
 
+        {/* supabase is passed to MapPanel so the driver can publish location via RPC (see Task 9/MapPanel) */}
         {state.latestLocation && (
           <MapPanel
             latestLocation={state.latestLocation}
@@ -83,7 +116,7 @@ export default function DeliveryPortalRoot({
           audience={audience}
           deliveryId={deliveryId}
           supabase={supabase}
-          onNewMessage={(msg: PortalMessage) => dispatch({ type: 'new_message', message: msg })}
+          onNewMessage={handleNewMessage}
         />
 
         {audience === 'driver' && !isTerminal && (
@@ -91,12 +124,8 @@ export default function DeliveryPortalRoot({
             status={state.status}
             deliveryId={deliveryId}
             supabase={supabase}
-            onStatusUpdate={(status: DeliveryStatus, updated_at: string) =>
-              dispatch({ type: 'status_update', status, updated_at })
-            }
-            onProofAttached={(proof_file_id: string) =>
-              dispatch({ type: 'proof_attached', proof_file_id })
-            }
+            onStatusUpdate={handleStatusUpdate}
+            onProofAttached={handleProofAttached}
           />
         )}
       </div>
