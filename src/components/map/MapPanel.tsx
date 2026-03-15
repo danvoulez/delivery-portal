@@ -24,16 +24,19 @@ function haversineDistance(
 }
 
 interface Props {
+  /** Non-null guaranteed by parent (DeliveryPortalRoot renders MapPanel only when latestLocation is non-null) */
   latestLocation: LatestLocation
-  dropoffAddressLine: string | null
+  dropoffAddressLine: string | null  // Reserved for future dropoff marker — not yet consumed
   audience: Audience
   deliveryId: string
   supabase: SupabaseClient
 }
 
 export default function MapPanel({ latestLocation, audience, deliveryId, supabase }: Props) {
+  const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    googleMapsApiKey: mapsApiKey ?? '',
   })
 
   const lastPublishedAt = useRef<number>(0)
@@ -53,7 +56,7 @@ export default function MapPanel({ latestLocation, audience, deliveryId, supabas
           haversineDistance(lastCoords.current, pos.coords) < MIN_DISTANCE_M
         ) return
 
-        await supabase.rpc('insert_driver_location_from_session', {
+        const { error: rpcError } = await supabase.rpc('insert_driver_location_from_session', {
           p_delivery_id: deliveryId,
           p_latitude: pos.coords.latitude,
           p_longitude: pos.coords.longitude,
@@ -61,11 +64,16 @@ export default function MapPanel({ latestLocation, audience, deliveryId, supabas
           p_recorded_at: new Date(pos.timestamp).toISOString(),
         })
 
+        if (rpcError) {
+          console.error('[MapPanel] location publish failed — throttle state not advanced', rpcError)
+          return
+        }
+
         lastPublishedAt.current = now
         lastCoords.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
       },
       (err) => console.error('geolocation error', err),
-      { enableHighAccuracy: true, maximumAge: 5_000 },
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
     )
 
     return () => {
@@ -78,6 +86,14 @@ export default function MapPanel({ latestLocation, audience, deliveryId, supabas
   if (!isLoaded) {
     return (
       <div className="h-48 bg-gray-100 rounded-xl animate-pulse border" />
+    )
+  }
+
+  if (!mapsApiKey) {
+    return (
+      <div className="h-48 bg-gray-100 rounded-xl border flex items-center justify-center">
+        <p className="text-xs text-gray-400">Mapa não disponível</p>
+      </div>
     )
   }
 
