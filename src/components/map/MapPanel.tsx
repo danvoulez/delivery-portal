@@ -51,35 +51,44 @@ export default function MapPanel({ latestLocation, audience, deliveryId: _delive
 
     watchId.current = navigator.geolocation.watchPosition(
       async (pos) => {
-        const now = Date.now()
-        if (now - lastPublishedAt.current < MIN_INTERVAL_MS) return
-        if (
-          lastCoords.current &&
-          haversineDistance(lastCoords.current, pos.coords) < MIN_DISTANCE_M
-        ) return
+        try {
+          const now = Date.now()
+          if (now - lastPublishedAt.current < MIN_INTERVAL_MS) return
+          if (
+            lastCoords.current &&
+            haversineDistance(lastCoords.current, pos.coords) < MIN_DISTANCE_M
+          ) return
 
-        const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
-        const res = await fetch(`${backendUrl}/api/external/delivery/location`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${portalSessionToken}`,
-          },
-          body: JSON.stringify({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracyMeters: pos.coords.accuracy ?? null,
-            recordedAt: new Date(pos.timestamp).toISOString(),
-          }),
-        })
+          const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
+          if (!backendUrl) {
+            console.error('NEXT_PUBLIC_DELIVERY_BACKEND_URL is not set')
+            return
+          }
 
-        if (!res.ok) {
-          console.error('[MapPanel] location publish failed — throttle state not advanced')
-          return
+          const res = await fetch(`${backendUrl}/api/external/delivery/location`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${portalSessionToken}`,
+            },
+            body: JSON.stringify({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              accuracyMeters: pos.coords.accuracy ?? null,
+              recordedAt: new Date(pos.timestamp).toISOString(),
+            }),
+          })
+
+          if (!res.ok) {
+            console.error('[MapPanel] location publish failed — throttle state not advanced')
+            return
+          }
+
+          lastPublishedAt.current = now
+          lastCoords.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        } catch (err) {
+          console.error('location publish error', err)
         }
-
-        lastPublishedAt.current = now
-        lastCoords.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
       },
       (err) => console.error('geolocation error', err),
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },

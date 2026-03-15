@@ -54,6 +54,7 @@ export default function DeliveryPortalRoot({
           // Missed location_update events are low-risk (a new ping will arrive shortly).
           // Missed new_message events are a known v1 gap — a future improvement would call
           // a snapshot RPC or re-fetch messages with after_id to recover missed chat messages.
+          // TODO: migrate to REST GET /status on reconnect — v1 gap, tracked
           const { data } = await supabase.rpc('get_delivery_current_status', {
             p_delivery_id: deliveryId,
           })
@@ -102,7 +103,7 @@ export default function DeliveryPortalRoot({
         {state.latestLocation && (
           <MapPanel
             latestLocation={state.latestLocation}
-            dropoffAddressLine={null}
+            dropoffAddressLine={null} // TODO: wire dropoffSummary from DriverDeliveryJobView when MapPanel uses it
             audience={audience}
             deliveryId={deliveryId}
             portalSessionToken={portalSessionToken}

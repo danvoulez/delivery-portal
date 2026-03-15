@@ -34,10 +34,16 @@ export default async function DeliveryPortalPage({ params }: Props) {
   const view = await viewRes.json()
 
   // Step 3: decode deliveryId from JWT payload (base64url, no npm package needed)
-  const jwtPayload = JSON.parse(
-    Buffer.from(session.portalSessionToken.split('.')[1], 'base64url').toString(),
-  )
-  const deliveryId: string = jwtPayload.delivery_id
+  let deliveryId: string
+  try {
+    const jwtPayload = JSON.parse(
+      Buffer.from(session.portalSessionToken.split('.')[1], 'base64url').toString(),
+    )
+    if (!jwtPayload.delivery_id) throw new Error('missing delivery_id in token')
+    deliveryId = jwtPayload.delivery_id
+  } catch {
+    return <TokenErrorPage />
+  }
 
   // Step 4: map to initial state
   const initialState = session.audience === 'driver'

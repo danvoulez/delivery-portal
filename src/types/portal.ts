@@ -70,6 +70,7 @@ export interface PortalSessionResolved {
 }
 
 // ─── Props passed from page.tsx to DeliveryPortalRoot ────────────────────────
+// Used as documentation of the DeliveryPortalRoot prop contract; not imported directly
 
 export interface PortalProps {
   portalSessionToken: string

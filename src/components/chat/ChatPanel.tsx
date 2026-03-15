@@ -16,13 +16,14 @@ interface Props {
 export default function ChatPanel({
   messages,
   audience,
-  deliveryId: _deliveryId,
+  deliveryId: _deliveryId, // available for future use; backend infers delivery from the JWT
   portalSessionToken,
   onNewMessage,
   isTerminal,
 }: Props) {
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Scroll to bottom when new messages arrive
@@ -34,8 +35,14 @@ export default function ChatPanel({
     const trimmed = body.trim()
     if (!trimmed || sending) return
     setSending(true)
+    setError(null)
     try {
       const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
+      if (!backendUrl) {
+        console.error('NEXT_PUBLIC_DELIVERY_BACKEND_URL is not set')
+        setError('Falha ao enviar mensagem.')
+        return
+      }
       const res = await fetch(`${backendUrl}/api/external/delivery/messages`, {
         method: 'POST',
         headers: {
@@ -46,11 +53,13 @@ export default function ChatPanel({
       })
       if (!res.ok) {
         console.error('Failed to send message')
+        setError('Falha ao enviar mensagem.')
         return
       }
       const data = await res.json() as DeliveryMessageView
       onNewMessage(data)
       setBody('')
+      setError(null)
     } finally {
       setSending(false)
     }
@@ -83,6 +92,8 @@ export default function ChatPanel({
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {error && <p className="text-red-500 text-xs mt-1 px-3">{error}</p>}
 
       <div className="border-t p-3 flex gap-2">
         <input
