@@ -1,3 +1,5 @@
+import type { DeliveryState } from '@/lib/delivery-state'
+
 export type DeliveryStatus =
   | 'assigned'
   | 'en_route_pickup'
@@ -8,40 +10,70 @@ export type DeliveryStatus =
 
 export type Audience = 'customer' | 'driver'
 
-export interface PortalMessage {
+// ─── Backend DTO types (verbatim from contracts.ts) ──────────────────────────
+
+export interface LatestLocationView {
+  latitude: number
+  longitude: number
+  accuracyMeters: number | null
+  recordedAt: string
+}
+
+export interface DeliveryMessageView {
   id: string
-  delivery_id: string
+  senderLabel: string
   body: string
-  sender_audience: Audience
-  created_at: string
+  createdAt: string
+  audience: 'customer' | 'driver' | 'ops' | 'system'
 }
 
-export interface LatestLocation {
-  lat: number
-  lng: number
-  accuracy_meters: number | null
-  recorded_at: string
+export interface DeliveryTimelineItem {
+  type: string
+  label: string
+  at: string
 }
 
-export interface DeliverySnapshot {
-  id: string
-  tenant_id: string
+export interface PublicDeliveryTrackingView {
+  deliveryPublicRef: string
   status: DeliveryStatus
-  public_ref: string | null
-  pickup_address_line: string | null
-  dropoff_address_line: string | null
-  customer_name: string | null
-  driver_name: string | null
-  proof_file_id: string | null
-  created_at: string
-  updated_at: string
-  messages: PortalMessage[]
-  latest_location: LatestLocation | null
+  statusLabel: string
+  timeline: DeliveryTimelineItem[]
+  etaSimple: string | null
+  destinationSummary: string
+  latestLocation: LatestLocationView | null
+  lastLocationAt: string | null
+  proofSummary: { available: boolean; label?: string } | null
+  messageThreadPreview: DeliveryMessageView[]
 }
 
-export interface PortalSession {
+export interface DriverDeliveryJobView {
+  deliveryPublicRef: string
+  pickupSummary: string
+  dropoffSummary: string
+  instructions: string | null
+  currentStatus: DeliveryStatus
+  allowedNextStatuses: DeliveryStatus[]
+  proofRequirements: { requiredForStatuses: DeliveryStatus[] }
+  messageThreadPreview: DeliveryMessageView[]
+  navigationDeepLink: string | null
+}
+
+// ─── Session resolve response ─────────────────────────────────────────────────
+
+export interface PortalSessionResolved {
+  sessionId: string
+  audience: Audience
+  deliveryPublicRef: string
+  expiresAt: string
+  capabilities: string[]
+  portalSessionToken: string
+}
+
+// ─── Props passed from page.tsx to DeliveryPortalRoot ────────────────────────
+
+export interface PortalProps {
   portalSessionToken: string
   audience: Audience
-  deliveryId: string
-  snapshot: DeliverySnapshot
+  deliveryId: string          // decoded from JWT
+  initialState: DeliveryState // already mapped — imported from lib/delivery-state
 }

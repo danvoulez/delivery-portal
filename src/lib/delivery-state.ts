@@ -1,42 +1,23 @@
-import type { DeliverySnapshot, DeliveryStatus, LatestLocation, PortalMessage } from '@/types/portal'
+import type { DeliveryStatus, DeliveryMessageView } from '@/types/portal'
 
 export interface DeliveryState {
-  id: string
-  tenantId: string
   status: DeliveryStatus
-  publicRef: string | null
-  pickupAddressLine: string | null
-  dropoffAddressLine: string | null
-  customerName: string | null
-  driverName: string | null
   proofFileId: string | null
   updatedAt: string
-  messages: PortalMessage[]
-  latestLocation: LatestLocation | null
+  messages: DeliveryMessageView[]
+  latestLocation: {
+    lat: number
+    lng: number
+    accuracy_meters: number | null
+    recorded_at: string
+  } | null
 }
 
 export type PortalEvent =
   | { type: 'status_update'; status: DeliveryStatus; updated_at: string }
   | { type: 'location_update'; latitude: number; longitude: number; accuracy_meters: number | null; recorded_at: string }
-  | { type: 'new_message'; message: PortalMessage }
+  | { type: 'new_message'; message: DeliveryMessageView }
   | { type: 'proof_attached'; proof_file_id: string }
-
-export function snapshotToState(snapshot: DeliverySnapshot): DeliveryState {
-  return {
-    id: snapshot.id,
-    tenantId: snapshot.tenant_id,
-    status: snapshot.status,
-    publicRef: snapshot.public_ref,
-    pickupAddressLine: snapshot.pickup_address_line,
-    dropoffAddressLine: snapshot.dropoff_address_line,
-    customerName: snapshot.customer_name,
-    driverName: snapshot.driver_name,
-    proofFileId: snapshot.proof_file_id,
-    updatedAt: snapshot.updated_at,
-    messages: snapshot.messages,
-    latestLocation: snapshot.latest_location,
-  }
-}
 
 export function applyEvent(state: DeliveryState, event: PortalEvent): DeliveryState {
   switch (event.type) {
