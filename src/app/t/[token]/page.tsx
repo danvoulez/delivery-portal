@@ -10,11 +10,8 @@ interface Props {
 export default async function DeliveryPortalPage({ params }: Props) {
   const { token } = params
 
-  const backendUrl = process.env.DELIVERY_BACKEND_URL
-  if (!backendUrl) throw new Error('DELIVERY_BACKEND_URL is not set')
-
-  // Step 1: resolve session
-  const sessionRes = await fetch(`${backendUrl}/api/external/delivery/session/resolve`, {
+  // Step 1: resolve session (same-origin — no DELIVERY_BACKEND_URL needed)
+  const sessionRes = await fetch(`/api/external/delivery/session/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token }),
@@ -26,21 +23,25 @@ export default async function DeliveryPortalPage({ params }: Props) {
 
   // Step 2: fetch appropriate view
   const viewRes = await fetch(
-    `${backendUrl}/api/external/delivery/${session.audience === 'driver' ? 'job' : 'tracking'}`,
+    `/api/external/delivery/${session.audience === 'driver' ? 'job' : 'tracking'}`,
     { headers: { Authorization: `Bearer ${session.portalSessionToken}` }, cache: 'no-store' },
   )
   if (!viewRes.ok) return <TokenErrorPage />
 
   const view = await viewRes.json()
 
-  // Step 3: decode deliveryId from JWT payload (base64url, no npm package needed)
+  // Step 3: decode deliveryId + tenantId from JWT payload (base64url, no npm needed)
   let deliveryId: string
+  let tenantId: string
   try {
     const jwtPayload = JSON.parse(
       Buffer.from(session.portalSessionToken.split('.')[1], 'base64url').toString(),
     )
-    if (!jwtPayload.delivery_id) throw new Error('missing delivery_id in token')
-    deliveryId = jwtPayload.delivery_id
+    // JWT is signed with camelCase claims (session-jwt.ts)
+    if (!jwtPayload.deliveryId) throw new Error('missing deliveryId in token')
+    if (!jwtPayload.tenantId)   throw new Error('missing tenantId in token')
+    deliveryId = jwtPayload.deliveryId
+    tenantId   = jwtPayload.tenantId
   } catch {
     return <TokenErrorPage />
   }
@@ -56,6 +57,7 @@ export default async function DeliveryPortalPage({ params }: Props) {
       portalSessionToken={session.portalSessionToken}
       audience={session.audience}
       deliveryId={deliveryId}
+      tenantId={tenantId}
       initialState={initialState}
     />
   )

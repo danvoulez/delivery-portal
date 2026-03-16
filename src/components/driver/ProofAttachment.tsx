@@ -35,14 +35,7 @@ export default function ProofAttachment({ deliveryId, supabase, portalSessionTok
         return
       }
 
-      const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
-      if (!backendUrl) {
-        console.error('NEXT_PUBLIC_DELIVERY_BACKEND_URL is not set')
-        setError('Erro ao registrar o comprovante. Tente novamente.')
-        return
-      }
-
-      const res = await fetch(`${backendUrl}/api/external/delivery/proof`, {
+      const res = await fetch(`/api/external/delivery/proof`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

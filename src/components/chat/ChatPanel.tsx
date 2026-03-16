@@ -37,13 +37,7 @@ export default function ChatPanel({
     setSending(true)
     setError(null)
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
-      if (!backendUrl) {
-        console.error('NEXT_PUBLIC_DELIVERY_BACKEND_URL is not set')
-        setError('Falha ao enviar mensagem.')
-        return
-      }
-      const res = await fetch(`${backendUrl}/api/external/delivery/messages`, {
+      const res = await fetch(`/api/external/delivery/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,8 +50,17 @@ export default function ChatPanel({
         setError('Falha ao enviar mensagem.')
         return
       }
-      const data = await res.json() as DeliveryMessageView
-      onNewMessage(data)
+      // Backend returns { messageId } — construct optimistic DeliveryMessageView locally.
+      // The realtime event (delivery.message.posted) will also arrive; dedup by id in reducer.
+      const { messageId } = await res.json() as { messageId: string }
+      const optimistic: DeliveryMessageView = {
+        id: messageId,
+        audience,
+        senderLabel: audience === 'driver' ? 'Driver' : 'Customer',
+        body: trimmed,
+        createdAt: new Date().toISOString(),
+      }
+      onNewMessage(optimistic)
       setBody('')
       setError(null)
     } finally {

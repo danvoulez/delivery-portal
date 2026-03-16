@@ -41,14 +41,7 @@ export default function DriverActions({
     setError(null)
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
-      if (!backendUrl) {
-        console.error('NEXT_PUBLIC_DELIVERY_BACKEND_URL is not set')
-        setError('Não foi possível atualizar o status. Tente novamente.')
-        return
-      }
-
-      const res = await fetch(`${backendUrl}/api/external/delivery/status`, {
+      const res = await fetch(`/api/external/delivery/status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,10 +55,8 @@ export default function DriverActions({
         return
       }
 
-      // backend returns updated_at; fallback to client time if not present
-      const data = await res.json().catch(() => null)
-      const updatedAt = data?.updated_at ?? new Date().toISOString()
-      onStatusUpdate(nextStatus, updatedAt)
+      // status endpoint returns 204 No Content — use client time for optimistic update
+      onStatusUpdate(nextStatus, new Date().toISOString())
     } finally {
       setLoading(false)
     }

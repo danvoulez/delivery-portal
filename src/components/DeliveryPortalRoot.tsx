@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { createPortalClient } from '@/lib/supabase-portal'
 import { applyEvent, type DeliveryState, type PortalEvent } from '@/lib/delivery-state'
-import type { Audience, DeliveryMessageView, DeliveryStatus } from '@/types/portal'
+import type { Audience, DeliveryMessageView, DeliveryStatus, PublicDeliveryTrackingView, DriverDeliveryJobView } from '@/types/portal'
 import { NEXT_STATUS } from '@/lib/pipeline-steps'
+import { trackingViewToState, jobViewToState } from '@/lib/portal-mapper'
 import PipelineView from './pipeline/PipelineView'
 import MapPanel from './map/MapPanel'
 import ChatPanel from './chat/ChatPanel'
@@ -14,20 +15,15 @@ interface Props {
   portalSessionToken: string
   audience: Audience
   deliveryId: string
+  tenantId: string
   initialState: DeliveryState
 }
-
-const KNOWN_EVENT_TYPES = new Set<string>([
-  'status_update',
-  'location_update',
-  'new_message',
-  'proof_attached',
-])
 
 export default function DeliveryPortalRoot({
   portalSessionToken,
   audience,
   deliveryId,
+  tenantId,
   initialState,
 }: Props) {
   const [state, dispatch] = useReducer(
@@ -37,29 +33,56 @@ export default function DeliveryPortalRoot({
 
   // Create once, stable ref — token is fixed for the lifetime of the session
   const supabase = useRef(createPortalClient(portalSessionToken)).current
+  const tokenRef  = useRef(portalSessionToken)
+  const audRef    = useRef(audience)
 
   useEffect(() => {
+    // Channel must match the backend's deliveryChannel(tenantId, deliveryId) format
     const channel = supabase
-      .channel(`delivery:${deliveryId}`)
+      .channel(`delivery:${tenantId}:${deliveryId}`)
       .on('broadcast', { event: '*' }, ({ event, payload }) => {
-        if (!KNOWN_EVENT_TYPES.has(event)) {
-          console.warn(`[portal] Unknown broadcast event type: "${event}" — ignored`)
-          return
+        // Map backend event names + envelope shape → frontend PortalEvent
+        // Envelope: { eventName, tenantId, deliveryId, occurredAt, payload: {...} }
+        const env = payload as { occurredAt: string; payload: Record<string, unknown> }
+        switch (event) {
+          case 'delivery.status.updated':
+            dispatch({ type: 'status_update', status: env.payload.currentStatus as DeliveryStatus, updated_at: env.occurredAt })
+            break
+          case 'delivery.location.updated':
+            dispatch({ type: 'location_update', latitude: env.payload.latitude as number, longitude: env.payload.longitude as number, accuracy_meters: env.payload.accuracyMeters as number | null, recorded_at: env.payload.recordedAt as string })
+            break
+          case 'delivery.message.posted':
+            dispatch({ type: 'new_message', message: { id: env.payload.messageId as string, audience: env.payload.audience as DeliveryMessageView['audience'], senderLabel: env.payload.senderLabel as string, body: env.payload.body as string, createdAt: env.payload.createdAt as string } })
+            break
+          case 'delivery.proof.attached':
+            dispatch({ type: 'proof_attached', proof_file_id: env.payload.proofFileId as string })
+            break
+          default:
+            console.warn(`[portal] Unknown broadcast event: "${event}" — ignored`)
         }
-        dispatch({ type: event, ...payload } as PortalEvent)
       })
       .subscribe(async (status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // v1 recovery: on reconnect we only re-fetch status to patch missed status_update events.
-          // Missed location_update events are low-risk (a new ping will arrive shortly).
-          // Missed new_message events are a known v1 gap — a future improvement would call
-          // a snapshot RPC or re-fetch messages with after_id to recover missed chat messages.
-          // TODO: migrate to REST GET /status on reconnect — v1 gap, tracked
-          const { data } = await supabase.rpc('get_delivery_current_status', {
-            p_delivery_id: deliveryId,
-          })
-          if (data) {
-            dispatch({ type: 'status_update', status: data.status, updated_at: data.updated_at })
+          // On reconnect: re-fetch the view via REST (same-origin) to recover missed status events.
+          // Missed location pings are low-risk (next ping arrives shortly).
+          // Missed messages are a known v1 gap.
+          try {
+            const endpoint = audRef.current === 'driver'
+              ? '/api/external/delivery/job'
+              : '/api/external/delivery/tracking'
+            const res = await fetch(endpoint, {
+              headers: { Authorization: `Bearer ${tokenRef.current}` },
+              cache: 'no-store',
+            })
+            if (res.ok) {
+              const view = await res.json()
+              const s = audRef.current === 'driver'
+                ? jobViewToState(view as DriverDeliveryJobView)
+                : trackingViewToState(view as PublicDeliveryTrackingView)
+              dispatch({ type: 'status_update', status: s.status, updated_at: s.updatedAt ?? new Date().toISOString() })
+            }
+          } catch (err) {
+            console.error('[portal] reconnect fetch failed', err)
           }
         }
       })
@@ -67,7 +90,7 @@ export default function DeliveryPortalRoot({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [deliveryId, supabase])
+  }, [deliveryId, tenantId, supabase])
 
   // A status is terminal when it has no next state in the machine
   const isTerminal = !(state.status in NEXT_STATUS)

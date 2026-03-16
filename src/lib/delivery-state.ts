@@ -37,6 +37,8 @@ export function applyEvent(state: DeliveryState, event: PortalEvent): DeliverySt
         },
       }
     case 'new_message':
+      // Deduplicate by id — handles optimistic add + realtime arrival of same message
+      if (state.messages.some(m => m.id === event.message.id)) return state
       return { ...state, messages: [...state.messages, event.message] }
     case 'proof_attached':
       // updatedAt not advanced — proof attachment does not change status

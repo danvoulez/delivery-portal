@@ -59,13 +59,7 @@ export default function MapPanel({ latestLocation, audience, deliveryId: _delive
             haversineDistance(lastCoords.current, pos.coords) < MIN_DISTANCE_M
           ) return
 
-          const backendUrl = process.env.NEXT_PUBLIC_DELIVERY_BACKEND_URL
-          if (!backendUrl) {
-            console.error('NEXT_PUBLIC_DELIVERY_BACKEND_URL is not set')
-            return
-          }
-
-          const res = await fetch(`${backendUrl}/api/external/delivery/location`, {
+          const res = await fetch(`/api/external/delivery/location`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
