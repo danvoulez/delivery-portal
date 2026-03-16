@@ -20,6 +20,9 @@ export async function middleware(req: NextRequest) {
   const rawToken = auth.startsWith('Bearer ') ? auth.slice(7) : undefined
   const sessionShard = rawToken ? rawToken.slice(-16) : undefined
 
+  // Skip rate limiting if Upstash is not configured (local dev without Redis)
+  if (!process.env.UPSTASH_REDIS_REST_URL) return NextResponse.next()
+
   const key = buildRateLimitKey(pathname, ip, sessionShard)
   const limiter = pathname === RESOLVE_PATH ? getResolveRateLimit() : getWriteRateLimit()
 
