@@ -14,7 +14,7 @@ export async function middleware(req: NextRequest) {
 
   if (!PORTAL_WRITE_PATHS.has(pathname)) return NextResponse.next()
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const ip = req.ip ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
   // Extract last 16 chars of Bearer token as session shard key (not the full token — avoids logging secrets)
   const auth = req.headers.get('authorization') ?? ''
   const rawToken = auth.startsWith('Bearer ') ? auth.slice(7) : undefined

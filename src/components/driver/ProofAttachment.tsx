@@ -16,7 +16,19 @@ export default function ProofAttachment({ deliveryId, supabase, portalSessionTok
   const [error, setError] = useState<string | null>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
+  const MAX_PROOF_BYTES = 10 * 1024 * 1024 // 10 MB
+
   const handleFile = async (file: File) => {
+    // Client-side validation before any network call
+    if (!file.type.startsWith('image/')) {
+      setError('Apenas imagens são aceitas como comprovante.')
+      return
+    }
+    if (file.size > MAX_PROOF_BYTES) {
+      setError('A imagem deve ter no máximo 10 MB.')
+      return
+    }
+
     setUploading(true)
     setError(null)
 

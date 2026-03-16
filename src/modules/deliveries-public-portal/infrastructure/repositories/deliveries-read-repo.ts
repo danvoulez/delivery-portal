@@ -3,7 +3,7 @@ import type {
   DriverDeliveryJobView,
   PublicDeliveryTrackingView,
 } from '../../application/contracts';
-import type { DeliveriesReadRepo } from '../../application/service';
+import type { DeliveriesReadRepo } from '../../application/contracts';
 
 export class SupabaseDeliveriesReadRepo implements DeliveriesReadRepo {
   constructor(private readonly supabase: SupabaseClient) {}

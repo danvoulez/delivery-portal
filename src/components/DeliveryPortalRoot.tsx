@@ -6,6 +6,7 @@ import { applyEvent, type DeliveryState, type PortalEvent } from '@/lib/delivery
 import type { Audience, DeliveryMessageView, DeliveryStatus, PublicDeliveryTrackingView, DriverDeliveryJobView } from '@/types/portal'
 import { NEXT_STATUS } from '@/lib/pipeline-steps'
 import { trackingViewToState, jobViewToState } from '@/lib/portal-mapper'
+import { realtimeBroadcastToPortalEvent } from '@/lib/realtime-mapper'
 import PipelineView from './pipeline/PipelineView'
 import MapPanel from './map/MapPanel'
 import ChatPanel from './chat/ChatPanel'
@@ -41,45 +42,35 @@ export default function DeliveryPortalRoot({
     const channel = supabase
       .channel(`delivery:${tenantId}:${deliveryId}`)
       .on('broadcast', { event: '*' }, ({ event, payload }) => {
-        // Map backend event names + envelope shape → frontend PortalEvent
-        // Envelope: { eventName, tenantId, deliveryId, occurredAt, payload: {...} }
-        const env = payload as { occurredAt: string; payload: Record<string, unknown> }
-        switch (event) {
-          case 'delivery.status.updated':
-            dispatch({ type: 'status_update', status: env.payload.currentStatus as DeliveryStatus, updated_at: env.occurredAt })
-            break
-          case 'delivery.location.updated':
-            dispatch({ type: 'location_update', latitude: env.payload.latitude as number, longitude: env.payload.longitude as number, accuracy_meters: env.payload.accuracyMeters as number | null, recorded_at: env.payload.recordedAt as string })
-            break
-          case 'delivery.message.posted':
-            dispatch({ type: 'new_message', message: { id: env.payload.messageId as string, audience: env.payload.audience as DeliveryMessageView['audience'], senderLabel: env.payload.senderLabel as string, body: env.payload.body as string, createdAt: env.payload.createdAt as string } })
-            break
-          case 'delivery.proof.attached':
-            dispatch({ type: 'proof_attached', proof_file_id: env.payload.proofFileId as string })
-            break
-          default:
-            console.warn(`[portal] Unknown broadcast event: "${event}" — ignored`)
-        }
+        const portalEvent = realtimeBroadcastToPortalEvent(event, payload)
+        if (portalEvent) dispatch(portalEvent)
       })
       .subscribe(async (status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // On reconnect: re-fetch the view via REST (same-origin) to recover missed status events.
+          // On reconnect: re-fetch the view to recover any missed events.
           // Missed location pings are low-risk (next ping arrives shortly).
-          // Missed messages are a known v1 gap.
+          // Reducer deduplicates messages by id, so replaying is safe.
           try {
+            const headers = { Authorization: `Bearer ${tokenRef.current}` }
             const endpoint = audRef.current === 'driver'
               ? '/api/external/delivery/job'
               : '/api/external/delivery/tracking'
-            const res = await fetch(endpoint, {
-              headers: { Authorization: `Bearer ${tokenRef.current}` },
-              cache: 'no-store',
-            })
-            if (res.ok) {
-              const view = await res.json()
+            const [viewRes, msgsRes] = await Promise.all([
+              fetch(endpoint, { headers, cache: 'no-store' }),
+              fetch('/api/external/delivery/messages', { headers, cache: 'no-store' }),
+            ])
+            if (viewRes.ok) {
+              const view = await viewRes.json()
               const s = audRef.current === 'driver'
                 ? jobViewToState(view as DriverDeliveryJobView)
                 : trackingViewToState(view as PublicDeliveryTrackingView)
               dispatch({ type: 'status_update', status: s.status, updated_at: s.updatedAt ?? new Date().toISOString() })
+            }
+            if (msgsRes.ok) {
+              const { messages } = await msgsRes.json() as { messages: DeliveryMessageView[] }
+              for (const msg of messages) {
+                dispatch({ type: 'new_message', message: msg })
+              }
             }
           } catch (err) {
             console.error('[portal] reconnect fetch failed', err)

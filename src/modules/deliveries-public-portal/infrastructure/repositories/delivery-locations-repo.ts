@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DeliveryLocationsRepo } from '../../application/service';
+import type { DeliveryLocationsRepo } from '../../application/contracts';
 
 export class SupabaseDeliveryLocationsRepo implements DeliveryLocationsRepo {
   constructor(private readonly supabase: SupabaseClient) {}

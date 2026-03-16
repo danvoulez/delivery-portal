@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DeliveriesWriteRepo } from '../../application/service';
+import type { DeliveriesWriteRepo } from '../../application/contracts';
 
 export class SupabaseDeliveriesWriteRepo implements DeliveriesWriteRepo {
   constructor(private readonly supabase: SupabaseClient) {}

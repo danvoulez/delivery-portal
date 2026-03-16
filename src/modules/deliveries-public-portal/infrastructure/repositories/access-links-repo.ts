@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DeliveryPortalAudience } from '../../domain/types';
-import type { DeliveryAccessLinksRepo } from '../../application/service';
+import type { DeliveryAccessLinksRepo } from '../../application/contracts';
 
 export class SupabaseAccessLinksRepo implements DeliveryAccessLinksRepo {
   constructor(private readonly supabase: SupabaseClient) {}
