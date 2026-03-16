@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { createPortalClient } from '@/lib/supabase-portal'
 import { applyEvent, type DeliveryState, type PortalEvent } from '@/lib/delivery-state'
 import type { Audience, DeliveryMessageView, DeliveryStatus, PublicDeliveryTrackingView, DriverDeliveryJobView } from '@/types/portal'
@@ -31,8 +31,8 @@ export default function DeliveryPortalRoot({
     initialState,
   )
 
-  // Create once, stable ref — token is fixed for the lifetime of the session
-  const supabase = useRef(createPortalClient(portalSessionToken)).current
+  // Lazy init — factory runs only on mount; token is fixed for the lifetime of the session
+  const [supabase] = useState(() => createPortalClient(portalSessionToken))
   const tokenRef  = useRef(portalSessionToken)
   const audRef    = useRef(audience)
 
